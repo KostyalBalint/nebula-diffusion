@@ -58,7 +58,7 @@ for k, v in vars(args).items():
     logger.info('[ARGS::%s] %s' % (k, repr(v)))
 
 # Checkpoint
-ckpt = torch.load(args.ckpt)
+ckpt = torch.load(args.ckpt, map_location=args.device)
 seed_all(args.seed)
 
 # Datasets and loaders

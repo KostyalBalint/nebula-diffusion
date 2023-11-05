@@ -14,7 +14,7 @@ from models.vae_gaussian import *
 from models.vae_flow import *
 from models.flow import add_spectral_norm, spectral_norm_power_iteration
 from evaluation import *
-
+from utils.objaverse_dataset import ObjaversePointCloudDataset
 
 # Arguments
 parser = argparse.ArgumentParser()
@@ -36,19 +36,22 @@ parser.add_argument('--residual', type=eval, default=True, choices=[True, False]
 parser.add_argument('--spectral_norm', type=eval, default=False, choices=[True, False])
 
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default='./data/shapenet.hdf5')
-parser.add_argument('--categories', type=str_list, default=['airplane'])
+parser.add_argument('--dataset_path', type=str, default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/pointCloudsNoColor')
+# parser.add_argument('--categories', type=str_list, default=['airplane'])
 parser.add_argument('--scale_mode', type=str, default='shape_unit')
 parser.add_argument('--train_batch_size', type=int, default=128)
 parser.add_argument('--val_batch_size', type=int, default=64)
+parser.add_argument('--annotations_file', type=str,
+                    default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/objaverse_labeling/concatenated_annotations.npy')
+parser.add_argument('--name_filter', type=str, default='laptop')
 
 # Optimizer and scheduler
 parser.add_argument('--lr', type=float, default=2e-3)
 parser.add_argument('--weight_decay', type=float, default=0)
 parser.add_argument('--max_grad_norm', type=float, default=10)
 parser.add_argument('--end_lr', type=float, default=1e-4)
-parser.add_argument('--sched_start_epoch', type=int, default=200*THOUSAND)
-parser.add_argument('--sched_end_epoch', type=int, default=400*THOUSAND)
+parser.add_argument('--sched_start_epoch', type=int, default=200 * THOUSAND)
+parser.add_argument('--sched_end_epoch', type=int, default=400 * THOUSAND)
 
 # Training
 parser.add_argument('--seed', type=int, default=2020)
@@ -57,7 +60,7 @@ parser.add_argument('--log_root', type=str, default='./logs_gen')
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--max_iters', type=int, default=float('inf'))
 parser.add_argument('--val_freq', type=int, default=1000)
-parser.add_argument('--test_freq', type=int, default=30*THOUSAND)
+parser.add_argument('--test_freq', type=int, default=30 * THOUSAND)
 parser.add_argument('--test_size', type=int, default=400)
 parser.add_argument('--tag', type=str, default=None)
 args = parser.parse_args()
@@ -79,18 +82,21 @@ logger.info(args)
 # Datasets and loaders
 logger.info('Loading datasets...')
 
-train_dset = ShapeNetCore(
-    path=args.dataset_path,
-    cates=args.categories,
-    split='train',
-    scale_mode=args.scale_mode,
-)
-val_dset = ShapeNetCore(
-    path=args.dataset_path,
-    cates=args.categories,
-    split='val',
-    scale_mode=args.scale_mode,
-)
+# train_dset = ShapeNetCore(
+#    path=args.dataset_path,
+#    cates=args.categories,
+#    split='train',
+#    scale_mode=args.scale_mode,
+# )
+train_dset = ObjaversePointCloudDataset(annotations_file=args.annotations_file,
+                                        pc_dir=args.dataset_path,
+                                        split='train',
+                                        scale_mode=args.scale_mode,
+                                        name_filter=args.name_filter,
+                                        load_to_mem=True)
+
+print('Dataset size: ' + str(train_dset.__len__()))
+
 train_iter = get_data_iterator(DataLoader(
     train_dset,
     batch_size=args.train_batch_size,
@@ -108,10 +114,10 @@ if args.spectral_norm:
     add_spectral_norm(model, logger=logger)
 
 # Optimizer and scheduler
-optimizer = torch.optim.Adam(model.parameters(), 
-    lr=args.lr, 
-    weight_decay=args.weight_decay
-)
+optimizer = torch.optim.Adam(model.parameters(),
+                             lr=args.lr,
+                             weight_decay=args.weight_decay
+                             )
 scheduler = get_linear_scheduler(
     optimizer,
     start_epoch=args.sched_start_epoch,
@@ -119,6 +125,7 @@ scheduler = get_linear_scheduler(
     start_lr=args.lr,
     end_lr=args.end_lr
 )
+
 
 # Train, validate and test
 def train(it):
@@ -151,13 +158,15 @@ def train(it):
     writer.add_scalar('train/grad_norm', orig_grad_norm, it)
     writer.flush()
 
+
 def validate_inspect(it):
     z = torch.randn([args.num_samples, args.latent_dim]).to(args.device)
-    x = model.sample(z, args.sample_num_points, flexibility=args.flexibility) #, truncate_std=args.truncate_std)
+    x = model.sample(z, args.sample_num_points, flexibility=args.flexibility)  # , truncate_std=args.truncate_std)
     writer.add_mesh('val/pointcloud', x, global_step=it)
     writer.flush()
     logger.info('[Inspect] Generating samples...')
 
+'''
 def test(it):
     ref_pcs = []
     for i, data in enumerate(val_dset):
@@ -181,7 +190,7 @@ def test(it):
 
     with torch.no_grad():
         results = compute_all_metrics(gen_pcs.to(args.device), ref_pcs.to(args.device), args.val_batch_size)
-        results = {k:v.item() for k, v in results.items()}
+        results = {k: v.item() for k, v in results.items()}
         jsd = jsd_between_point_cloud_sets(gen_pcs.cpu().numpy(), ref_pcs.cpu().numpy())
         results['jsd'] = jsd
 
@@ -199,10 +208,11 @@ def test(it):
     # logger.info('[Test] Coverage  | CD %.6f | EMD %.6f' % (results['lgan_cov-CD'], results['lgan_cov-EMD']))
     # logger.info('[Test] MinMatDis | CD %.6f | EMD %.6f' % (results['lgan_mmd-CD'], results['lgan_mmd-EMD']))
     # logger.info('[Test] 1NN-Accur | CD %.6f | EMD %.6f' % (results['1-NN-CD-acc'], results['1-NN-EMD-acc']))
-    logger.info('[Test] Coverage  | CD %.6f | EMD n/a' % (results['lgan_cov-CD'], ))
-    logger.info('[Test] MinMatDis | CD %.6f | EMD n/a' % (results['lgan_mmd-CD'], ))
-    logger.info('[Test] 1NN-Accur | CD %.6f | EMD n/a' % (results['1-NN-CD-acc'], ))
+    logger.info('[Test] Coverage  | CD %.6f | EMD n/a' % (results['lgan_cov-CD'],))
+    logger.info('[Test] MinMatDis | CD %.6f | EMD n/a' % (results['lgan_mmd-CD'],))
+    logger.info('[Test] 1NN-Accur | CD %.6f | EMD n/a' % (results['1-NN-CD-acc'],))
     logger.info('[Test] JsnShnDis | %.6f ' % (results['jsd']))
+'''
 
 # Main loop
 logger.info('Start training...')
@@ -218,7 +228,8 @@ try:
             }
             ckpt_mgr.save(model, args, 0, others=opt_states, step=it)
         if it % args.test_freq == 0 or it == args.max_iters:
-            test(it)
+            # test(it)
+            pass
         it += 1
 
 except KeyboardInterrupt:

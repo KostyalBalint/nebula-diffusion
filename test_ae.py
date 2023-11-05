@@ -3,6 +3,7 @@ import time
 import argparse
 import torch
 from tqdm.auto import tqdm
+import numpy as np
 
 from utils.dataset import *
 from utils.misc import *
@@ -31,7 +32,7 @@ for k, v in vars(args).items():
     logger.info('[ARGS::%s] %s' % (k, repr(v)))
 
 # Checkpoint
-ckpt = torch.load(args.ckpt)
+ckpt = torch.load(args.ckpt, map_location=args.device)
 seed_all(ckpt['args'].seed)
 
 # Datasets and loaders
