@@ -6,6 +6,7 @@ import torch.utils.tensorboard
 from torch.utils.data import DataLoader
 from torch.nn.utils import clip_grad_norm_
 from tqdm.auto import tqdm
+from transformers import BertModel, BertTokenizerFast
 
 from utils.dataset import *
 from utils.misc import *
@@ -36,7 +37,8 @@ parser.add_argument('--residual', type=eval, default=True, choices=[True, False]
 parser.add_argument('--spectral_norm', type=eval, default=False, choices=[True, False])
 
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/pointCloudsNoColor')
+parser.add_argument('--dataset_path', type=str, default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/pointClouds3000')
+parser.add_argument('--dataset_file_ext', type=str, default='.npz')
 # parser.add_argument('--categories', type=str_list, default=['airplane'])
 parser.add_argument('--scale_mode', type=str, default='shape_unit')
 parser.add_argument('--train_batch_size', type=int, default=128)
@@ -44,6 +46,7 @@ parser.add_argument('--val_batch_size', type=int, default=64)
 parser.add_argument('--annotations_file', type=str,
                     default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/objaverse_labeling/concatenated_annotations.npy')
 parser.add_argument('--name_filter', type=str, default='laptop')
+parser.add_argument('--load_to_mem', type=eval, default=False, choices=[True, False])
 
 # Optimizer and scheduler
 parser.add_argument('--lr', type=float, default=2e-3)
@@ -54,6 +57,7 @@ parser.add_argument('--sched_start_epoch', type=int, default=200 * THOUSAND)
 parser.add_argument('--sched_end_epoch', type=int, default=400 * THOUSAND)
 
 # Training
+parser.add_argument('--resume_ckpt', type=str, default=None)
 parser.add_argument('--seed', type=int, default=2020)
 parser.add_argument('--logging', type=eval, default=True, choices=[True, False])
 parser.add_argument('--log_root', type=str, default='./logs_gen')
@@ -66,8 +70,15 @@ parser.add_argument('--tag', type=str, default=None)
 args = parser.parse_args()
 seed_all(args.seed)
 
+# Resume training
+if args.resume_ckpt:
+    log_dir = args.resume_ckpt
+    logger = get_logger('train', log_dir)
+    logger.info(f'Resuming training for {log_dir}')
+    writer = torch.utils.tensorboard.SummaryWriter(log_dir)
+    ckpt_mgr = CheckpointManager(log_dir)
 # Logging
-if args.logging:
+elif args.logging:
     log_dir = get_new_log_dir(args.log_root, prefix='GEN_', postfix='_' + args.tag if args.tag is not None else '')
     logger = get_logger('train', log_dir)
     writer = torch.utils.tensorboard.SummaryWriter(log_dir)
@@ -79,6 +90,13 @@ else:
     ckpt_mgr = BlackHole()
 logger.info(args)
 
+is_resume = False
+# Load previous args for resume
+if args.resume_ckpt:
+    is_resume = True
+    ckpt = ckpt_mgr.load_latest()
+    args = ckpt['args']
+
 # Datasets and loaders
 logger.info('Loading datasets...')
 
@@ -89,11 +107,13 @@ logger.info('Loading datasets...')
 #    scale_mode=args.scale_mode,
 # )
 train_dset = ObjaversePointCloudDataset(annotations_file=args.annotations_file,
+                                        file_ext=args.dataset_file_ext,
                                         pc_dir=args.dataset_path,
-                                        split='train',
                                         scale_mode=args.scale_mode,
                                         name_filter=args.name_filter,
-                                        load_to_mem=True)
+                                        load_to_mem=args.load_to_mem)
+
+args.latent_text_dim = train_dset.__getitem__(0)['latent_text'].shape[0]
 
 print('Dataset size: ' + str(train_dset.__len__()))
 
@@ -126,12 +146,19 @@ scheduler = get_linear_scheduler(
     end_lr=args.end_lr
 )
 
+# Load previous state dicts
+if is_resume:
+    model.load_state_dict(ckpt['state_dict'])
+    optimizer.load_state_dict(ckpt['others']['optimizer'])
+    scheduler.load_state_dict(ckpt['others']['scheduler'])
+
 
 # Train, validate and test
 def train(it):
     # Load data
     batch = next(train_iter)
     x = batch['pointcloud'].to(args.device)
+    encoded_text = batch['latent_text'].to(args.device)
 
     # Reset grad and model state
     optimizer.zero_grad()
@@ -141,7 +168,7 @@ def train(it):
 
     # Forward
     kl_weight = args.kl_weight
-    loss = model.get_loss(x, kl_weight=kl_weight, writer=writer, it=it)
+    loss = model.get_loss(x, encoded_text, kl_weight=kl_weight, writer=writer, it=it)
 
     # Backward and optimize
     loss.backward()
@@ -159,9 +186,24 @@ def train(it):
     writer.flush()
 
 
+def tokenize_sentences(sentence):
+    tokenizer = BertTokenizerFast.from_pretrained("setu4993/LEALLA-small")
+    tokenizer_model = BertModel.from_pretrained("setu4993/LEALLA-small").to('mps')
+    tokenizer_model = tokenizer_model.eval()
+    english_inputs = tokenizer([sentence], return_tensors="pt", padding=True, max_length=512, truncation=True).to('mps')
+    with torch.no_grad():
+        english_outputs = tokenizer_model(**english_inputs).pooler_output
+
+    return english_outputs.cpu().numpy()[0]
+
+
 def validate_inspect(it):
+    encoded_text = tokenize_sentences("Table")
+    encoded_text = torch.tensor(np.resize(encoded_text, (args.num_samples, encoded_text.shape[0]))).to(args.device)
+
     z = torch.randn([args.num_samples, args.latent_dim]).to(args.device)
-    x = model.sample(z, args.sample_num_points, flexibility=args.flexibility)  # , truncate_std=args.truncate_std)
+
+    x = model.sample(z, encoded_text, args.sample_num_points, flexibility=args.flexibility)  # , truncate_std=args.truncate_std)
     writer.add_mesh('val/pointcloud', x, global_step=it)
     writer.flush()
     logger.info('[Inspect] Generating samples...')
@@ -218,6 +260,8 @@ def test(it):
 logger.info('Start training...')
 try:
     it = 1
+    if is_resume:
+        it = ckpt['others']['iteration']
     while it <= args.max_iters:
         train(it)
         if it % args.val_freq == 0 or it == args.max_iters:
@@ -225,6 +269,7 @@ try:
             opt_states = {
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
+                'iteration': it
             }
             ckpt_mgr.save(model, args, 0, others=opt_states, step=it)
         if it % args.test_freq == 0 or it == args.max_iters:

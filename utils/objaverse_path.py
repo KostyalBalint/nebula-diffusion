@@ -5,7 +5,7 @@ import urllib.request
 from typing import Dict
 
 
-def load_object_paths(helper_file_path: str = '') -> Dict[str, str]:
+def load_object_paths(helper_file_path: str = '', file_ext: str = '.ply') -> Dict[str, str]:
     """Load the object paths from the dataset.
 
     The object paths specify the location of where the object is located
@@ -24,4 +24,4 @@ def load_object_paths(helper_file_path: str = '') -> Dict[str, str]:
     with gzip.open(local_path, "rb") as f:
         object_paths = json.load(f)
 
-    return {key: f'{value.replace("glbs/", "").replace(".glb", ".ply")}' for key, value in object_paths.items()}
+    return {key: f'{value.replace("glbs/", "").replace(".glb", file_ext)}' for key, value in object_paths.items()}

@@ -1,10 +1,9 @@
+from models.common import reparameterize_gaussian, gaussian_entropy, standard_normal_logprob, truncated_normal_
+from models.diffusion import DiffusionPoint, PointwiseNet, VarianceSchedule
+from models.flow import build_latent_flow
+from models.encoders import PointNetEncoder
 import torch
 from torch.nn import Module
-
-from .common import *
-from .encoders import *
-from .diffusion import *
-from .flow import *
 
 
 class FlowVAE(Module):
@@ -15,7 +14,7 @@ class FlowVAE(Module):
         self.encoder = PointNetEncoder(args.latent_dim)
         self.flow = build_latent_flow(args)
         self.diffusion = DiffusionPoint(
-            net = PointwiseNet(point_dim=3, context_dim=args.latent_dim, residual=args.residual),
+            net = PointwiseNet(point_dim=3, context_dim=args.latent_dim + args.latent_text_dim, residual=args.residual),
             var_sched = VarianceSchedule(
                 num_steps=args.num_steps,
                 beta_1=args.beta_1,
@@ -24,7 +23,7 @@ class FlowVAE(Module):
             )
         )
 
-    def get_loss(self, x, kl_weight, writer=None, it=None):
+    def get_loss(self, x, encoded_text, kl_weight, writer=None, it=None):
         """
         Args:
             x:  Input point clouds, (B, N, d).
@@ -32,8 +31,12 @@ class FlowVAE(Module):
         batch_size, _, _ = x.size()
         # print(x.size())
         z_mu, z_sigma = self.encoder(x)
+        #print(z_mu.size()) #torch.Size([64, 256]) [batch_size, latent_dim]
+        #print(z_sigma.size()) #torch.Size([64, 256]) [batch_size, latent_dim]
+
         z = reparameterize_gaussian(mean=z_mu, logvar=z_sigma)  # (B, F)
-        
+        #print(z.size()) # [batch_size * latent_dim]
+
         # H[Q(z|X)]
         entropy = gaussian_entropy(logvar=z_sigma)      # (B, )
 
@@ -42,8 +45,11 @@ class FlowVAE(Module):
         log_pw = standard_normal_logprob(w).view(batch_size, -1).sum(dim=1, keepdim=True)   # (B, 1)
         log_pz = log_pw - delta_log_pw.view(batch_size, 1)  # (B, 1)
 
+        # Condition the latent z vector by custom encoded_text
+        conditioned_z = torch.cat((z, encoded_text), 1)
+
         # Negative ELBO of P(X|z)
-        neg_elbo = self.diffusion.get_loss(x, z)
+        neg_elbo = self.diffusion.get_loss(x, conditioned_z)
 
         # Loss
         loss_entropy = -entropy.mean()
@@ -61,11 +67,12 @@ class FlowVAE(Module):
 
         return loss
 
-    def sample(self, w, num_points, flexibility, truncate_std=None):
+    def sample(self, w, encoded_text, num_points, flexibility, truncate_std=None):
         batch_size, _ = w.size()
         if truncate_std is not None:
             w = truncated_normal_(w, mean=0, std=1, trunc_std=truncate_std)
         # Reverse: z <- w.
         z = self.flow(w, reverse=True).view(batch_size, -1)
-        samples = self.diffusion.sample(num_points, context=z, flexibility=flexibility)
+        conditioned_z = torch.cat((z, encoded_text), 1)
+        samples = self.diffusion.sample(num_points, context=conditioned_z, flexibility=flexibility)
         return samples

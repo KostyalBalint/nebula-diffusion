@@ -5,17 +5,18 @@ import numpy as np
 import torch
 import trimesh as trimesh
 from torch.utils.data import Dataset
+from tqdm.auto import tqdm
 
 from utils.objaverse_path import load_object_paths
 
 
 class ObjaversePointCloudDataset(Dataset):
-    def __init__(self, annotations_file, pc_dir, split, scale_mode, load_to_mem=False, name_filter=None, transform=None):
+    def __init__(self, annotations_file, pc_dir, scale_mode, file_ext='.ply', load_to_mem=False, name_filter=None, transform=None):
         self.load_to_mem = load_to_mem
         self.pc_dir = pc_dir
         # { key(uid): path(base/[dir]/uid.ply) }
-        self.object_paths = load_object_paths(helper_file_path='data')
-        pc_dir_uids = set(self.read_uids_from_pc_folder())
+        self.object_paths = load_object_paths(helper_file_path='data', file_ext=file_ext)
+        pc_dir_uids = set(self.read_uids_from_pc_folder(file_ext))
 
         # {[uid]: {'uid': str,
         #  'name': str,
@@ -41,7 +42,6 @@ class ObjaversePointCloudDataset(Dataset):
         self.uids.sort(reverse=False)
         random.Random(2023).shuffle(self.uids)
 
-        self.split = split
         self.scale_mode = scale_mode
         self.transform = transform
 
@@ -76,12 +76,16 @@ class ObjaversePointCloudDataset(Dataset):
     def load_pc_from_disk(self, idx):
         uid = self.uids[idx]
         path = os.path.join(self.pc_dir, self.object_paths[uid])
-        pc = torch.tensor(trimesh.load(path).vertices, dtype=torch.float32)
+        if path.endswith('.ply'):
+            pc = torch.tensor(trimesh.load(path).vertices, dtype=torch.float32)
+        else:
+            pc = torch.tensor(np.load(path)['arr_0'], dtype=torch.float32)
         return pc, uid
 
     def load_all_pc_from_disk(self):
         pcs = []
-        for i in range(len(self.uids)):
+        print('Loading dataset into memory...')
+        for i in tqdm(range(len(self.uids))):
             pcs.append(self.load_pc_from_disk(i))
         return pcs
 
@@ -106,13 +110,13 @@ class ObjaversePointCloudDataset(Dataset):
 
         return (pc - shift) / scale, shift, scale
 
-    def read_uids_from_pc_folder(self):
+    def read_uids_from_pc_folder(self, file_ext):
         uids = []
 
         # Walk through the folder structure
         for root, dirs, files in os.walk(self.pc_dir):
             for file in files:
-                if file.endswith('.ply'):
+                if file.endswith(file_ext):
                     # Construct the full file path
                     file_path = os.path.join(root, file)
 

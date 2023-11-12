@@ -22,7 +22,7 @@ class GaussianVAE(Module):
             )
         )
         
-    def get_loss(self, x, writer=None, it=None, kl_weight=1.0):
+    def get_loss(self, x, encoded_text, writer=None, it=None, kl_weight=1.0):
         """
         Args:
             x:  Input point clouds, (B, N, d).
