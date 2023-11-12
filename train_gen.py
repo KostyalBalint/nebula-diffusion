@@ -45,7 +45,7 @@ parser.add_argument('--train_batch_size', type=int, default=128)
 parser.add_argument('--val_batch_size', type=int, default=64)
 parser.add_argument('--annotations_file', type=str,
                     default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/objaverse_labeling/concatenated_annotations.npy')
-parser.add_argument('--name_filter', type=str, default='laptop')
+parser.add_argument('--name_filter', type=str, default=None)
 parser.add_argument('--load_to_mem', type=eval, default=False, choices=[True, False])
 
 # Optimizer and scheduler
