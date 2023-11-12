@@ -188,9 +188,9 @@ def train(it):
 
 def tokenize_sentences(sentence):
     tokenizer = BertTokenizerFast.from_pretrained("setu4993/LEALLA-small")
-    tokenizer_model = BertModel.from_pretrained("setu4993/LEALLA-small").to('mps')
+    tokenizer_model = BertModel.from_pretrained("setu4993/LEALLA-small").to(args.device)
     tokenizer_model = tokenizer_model.eval()
-    english_inputs = tokenizer([sentence], return_tensors="pt", padding=True, max_length=512, truncation=True).to('mps')
+    english_inputs = tokenizer([sentence], return_tensors="pt", padding=True, max_length=512, truncation=True).to(args.device)
     with torch.no_grad():
         english_outputs = tokenizer_model(**english_inputs).pooler_output
 
