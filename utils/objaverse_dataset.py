@@ -40,14 +40,14 @@ class ObjaversePointCloudDataset(Dataset):
         random.Random(2023).shuffle(self.uids)
 
         generator = torch.Generator().manual_seed(42)
-        split = random_split(self.uids, [0.8, 0.18, 0.02], generator=generator)
+        split_data = random_split(self.uids, [0.8, 0.15, 0.05], generator=generator)
 
         if split == 'train':    # 80%
-            self.uids = split[0]
+            self.uids = list(split_data[0])
         if split == 'test':     # 15%
-            self.uids = split[1]
+            self.uids = list(split_data[1])
         if split == 'val':      # 5%
-            self.uids = split[2]
+            self.uids = list(split_data[2])
 
         if load_to_mem:
             self.pointclouds = self.load_all_pc_from_disk()
