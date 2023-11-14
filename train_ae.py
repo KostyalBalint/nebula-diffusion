@@ -58,6 +58,9 @@ parser.add_argument('--tag', type=str, default=None)
 parser.add_argument('--num_val_batches', type=int, default=-1)
 parser.add_argument('--num_inspect_batches', type=int, default=1)
 parser.add_argument('--num_inspect_pointclouds', type=int, default=4)
+
+# Validation
+parser.add_argument('--val_set_percentage', type=float, default=0.1)
 args = parser.parse_args()
 seed_all(args.seed)
 
@@ -160,7 +163,11 @@ def train(it):
 def validate_loss(it):
     all_refs = []
     all_recons = []
-    for i, batch in enumerate(tqdm(val_loader, desc='Validate')):
+    subset_percentage = args.val_set_percentage
+    val_loader.dataset.dataset = val_loader.dataset.dataset.shuffle()
+    subset_size = int(len(val_loader) * subset_percentage)
+
+    for i, batch in enumerate(tqdm(val_loader, desc='Validate', total=subset_size)):
         if args.num_val_batches > 0 and i >= args.num_val_batches:
             break
         ref = batch['pointcloud'].to(args.device)
