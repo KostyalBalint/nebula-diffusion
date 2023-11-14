@@ -40,7 +40,7 @@ class ObjaversePointCloudDataset(Dataset):
         random.Random(2023).shuffle(self.uids)
 
         generator = torch.Generator().manual_seed(42)
-        split = random_split(self.uids, [0.8, 0.15, 0.05], generator=generator)
+        split = random_split(self.uids, [0.8, 0.18, 0.02], generator=generator)
 
         if split == 'train':    # 80%
             self.uids = split[0]
