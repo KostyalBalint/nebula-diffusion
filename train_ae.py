@@ -48,6 +48,7 @@ parser.add_argument('--sched_start_epoch', type=int, default=150 * THOUSAND)
 parser.add_argument('--sched_end_epoch', type=int, default=300 * THOUSAND)
 
 # Training
+parser.add_argument('--resume_ckpt', type=str, default=None)
 parser.add_argument('--seed', type=int, default=2020)
 parser.add_argument('--logging', type=eval, default=True, choices=[True, False])
 parser.add_argument('--log_root', type=str, default='./logs_ae')
@@ -64,8 +65,15 @@ parser.add_argument('--val_set_percentage', type=float, default=0.1)
 args = parser.parse_args()
 seed_all(args.seed)
 
+# Resume training
+if args.resume_ckpt:
+    log_dir = args.resume_ckpt
+    logger = get_logger('train', log_dir)
+    logger.info(f'Resuming training for {log_dir}')
+    writer = torch.utils.tensorboard.SummaryWriter(log_dir)
+    ckpt_mgr = CheckpointManager(log_dir)
 # Logging
-if args.logging:
+elif args.logging:
     log_dir = get_new_log_dir(args.log_root, prefix='AE_', postfix='_' + args.tag if args.tag is not None else '')
     logger = get_logger('train', log_dir)
     writer = torch.utils.tensorboard.SummaryWriter(log_dir)
@@ -74,6 +82,14 @@ else:
     logger = get_logger('train', None)
     writer = BlackHole()
     ckpt_mgr = BlackHole()
+
+is_resume = False
+# Load previous args for resume
+if args.resume_ckpt:
+    is_resume = True
+    ckpt = ckpt_mgr.load_latest()
+    args = ckpt['args']
+
 logger.info(args)
 
 # Datasets and loaders
@@ -111,13 +127,13 @@ val_loader = DataLoader(val_dset, batch_size=args.val_batch_size, num_workers=0)
 
 # Model
 logger.info('Building model...')
-if args.resume is not None:
-    logger.info('Resuming from checkpoint...')
-    ckpt = torch.load(args.resume)
-    model = AutoEncoder(ckpt['args']).to(args.device)
-    model.load_state_dict(ckpt['state_dict'])
-else:
-    model = AutoEncoder(args).to(args.device)
+#if args.resume is not None:
+#    logger.info('Resuming from checkpoint...')
+#    ckpt = torch.load(args.resume)
+#    model = AutoEncoder(ckpt['args']).to(args.device)
+#    model.load_state_dict(ckpt['state_dict'])
+#else:
+model = AutoEncoder(args).to(args.device)
 logger.info(repr(model))
 
 # Optimizer and scheduler
@@ -133,6 +149,11 @@ scheduler = get_linear_scheduler(
     end_lr=args.end_lr
 )
 
+# Load previous state dicts
+if is_resume:
+    model.load_state_dict(ckpt['state_dict'])
+    optimizer.load_state_dict(ckpt['others']['optimizer'])
+    scheduler.load_state_dict(ckpt['others']['scheduler'])
 
 # Train, validate
 def train(it):
@@ -217,6 +238,8 @@ def validate_inspect(it):
 logger.info('Start training...')
 try:
     it = 1
+    if is_resume:
+        it = ckpt['others']['iteration']
     while it <= args.max_iters:
         train(it)
         if it % args.val_freq == 0 or it == args.max_iters:
@@ -226,6 +249,7 @@ try:
             opt_states = {
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
+                'iteration': it
             }
             ckpt_mgr.save(model, args, cd_loss, opt_states, step=it)
         it += 1

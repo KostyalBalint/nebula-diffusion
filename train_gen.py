@@ -88,7 +88,6 @@ else:
     logger = get_logger('train', None)
     writer = BlackHole()
     ckpt_mgr = BlackHole()
-logger.info(args)
 
 is_resume = False
 # Load previous args for resume
@@ -96,6 +95,8 @@ if args.resume_ckpt:
     is_resume = True
     ckpt = ckpt_mgr.load_latest()
     args = ckpt['args']
+
+logger.info(args)
 
 # Datasets and loaders
 logger.info('Loading datasets...')
