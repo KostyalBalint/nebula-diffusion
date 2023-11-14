@@ -164,7 +164,7 @@ def validate_loss(it):
     all_refs = []
     all_recons = []
     subset_percentage = args.val_set_percentage
-    val_loader.dataset.dataset = val_loader.dataset.dataset.shuffle()
+    val_loader.dataset.shuffle()
     subset_size = int(len(val_loader) * subset_percentage)
 
     for i, batch in enumerate(tqdm(val_loader, desc='Validate', total=subset_size)):

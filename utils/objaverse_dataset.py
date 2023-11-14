@@ -58,6 +58,9 @@ class ObjaversePointCloudDataset(Dataset):
     def __len__(self):
         return len(self.uids)
 
+    def shuffle(self, seed = None):
+        random.Random(seed).shuffle(self.uids)
+
     def __getitem__(self, idx):
         pc, uid = self.get_pc(idx)
         pc, shift, scale = self.scale_pc(pc)
