@@ -8,10 +8,10 @@ from tqdm.auto import tqdm
 from utils.dataset import *
 from utils.misc import *
 from utils.data import *
+from utils.objaverse_dataset import ObjaversePointCloudDataset
 from utils.transform import *
 from models.autoencoder import *
 from evaluation import EMD_CD
-
 
 # Arguments
 parser = argparse.ArgumentParser()
@@ -26,20 +26,26 @@ parser.add_argument('--residual', type=eval, default=True, choices=[True, False]
 parser.add_argument('--resume', type=str, default=None)
 
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default='./data/shapenet.hdf5')
-parser.add_argument('--categories', type=str_list, default=['airplane'])
+# Datasets and loaders
+parser.add_argument('--dataset_path', type=str, default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/pointClouds3000')
+parser.add_argument('--dataset_file_ext', type=str, default='.npz')
+# parser.add_argument('--categories', type=str_list, default=['airplane'])
 parser.add_argument('--scale_mode', type=str, default='shape_unit')
 parser.add_argument('--train_batch_size', type=int, default=128)
 parser.add_argument('--val_batch_size', type=int, default=32)
 parser.add_argument('--rotate', type=eval, default=False, choices=[True, False])
+parser.add_argument('--annotations_file', type=str,
+                    default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/objaverse_labeling/concatenated_annotations.npy')
+parser.add_argument('--name_filter', type=str, default=None)
+parser.add_argument('--load_to_mem', type=eval, default=False, choices=[True, False])
 
 # Optimizer and scheduler
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--weight_decay', type=float, default=0)
 parser.add_argument('--max_grad_norm', type=float, default=10)
 parser.add_argument('--end_lr', type=float, default=1e-4)
-parser.add_argument('--sched_start_epoch', type=int, default=150*THOUSAND)
-parser.add_argument('--sched_end_epoch', type=int, default=300*THOUSAND)
+parser.add_argument('--sched_start_epoch', type=int, default=150 * THOUSAND)
+parser.add_argument('--sched_end_epoch', type=int, default=300 * THOUSAND)
 
 # Training
 parser.add_argument('--seed', type=int, default=2020)
@@ -73,27 +79,32 @@ if args.rotate:
     transform = RandomRotate(180, ['pointcloud'], axis=1)
 logger.info('Transform: %s' % repr(transform))
 logger.info('Loading datasets...')
-train_dset = ShapeNetCore(
-    path=args.dataset_path,
-    cates=args.categories,
-    split='train',
-    scale_mode=args.scale_mode,
-    transform=transform,
-)
-val_dset = ShapeNetCore(
-    path=args.dataset_path,
-    cates=args.categories,
-    split='val',
-    scale_mode=args.scale_mode,
-    transform=transform,
-)
+
+train_dset = ObjaversePointCloudDataset(annotations_file=args.annotations_file,
+                                        file_ext=args.dataset_file_ext,
+                                        pc_dir=args.dataset_path,
+                                        split='train',
+                                        scale_mode=args.scale_mode,
+                                        name_filter=args.name_filter,
+                                        load_to_mem=args.load_to_mem)
+
+val_dset = ObjaversePointCloudDataset(annotations_file=args.annotations_file,
+                                      file_ext=args.dataset_file_ext,
+                                      pc_dir=args.dataset_path,
+                                      split='val',
+                                      scale_mode=args.scale_mode,
+                                      name_filter=args.name_filter,
+                                      load_to_mem=args.load_to_mem)
+
+args.latent_text_dim = train_dset.__getitem__(0)['latent_text'].shape[0]
+logger.info('Dataset size: ' + str(train_dset.__len__()))
+
 train_iter = get_data_iterator(DataLoader(
     train_dset,
     batch_size=args.train_batch_size,
     num_workers=0,
 ))
 val_loader = DataLoader(val_dset, batch_size=args.val_batch_size, num_workers=0)
-
 
 # Model
 logger.info('Building model...')
@@ -106,12 +117,11 @@ else:
     model = AutoEncoder(args).to(args.device)
 logger.info(repr(model))
 
-
 # Optimizer and scheduler
-optimizer = torch.optim.Adam(model.parameters(), 
-    lr=args.lr, 
-    weight_decay=args.weight_decay
-)
+optimizer = torch.optim.Adam(model.parameters(),
+                             lr=args.lr,
+                             weight_decay=args.weight_decay
+                             )
 scheduler = get_linear_scheduler(
     optimizer,
     start_epoch=args.sched_start_epoch,
@@ -120,7 +130,8 @@ scheduler = get_linear_scheduler(
     end_lr=args.end_lr
 )
 
-# Train, validate 
+
+# Train, validate
 def train(it):
     # Load data
     batch = next(train_iter)
@@ -145,8 +156,8 @@ def train(it):
     writer.add_scalar('train/grad_norm', orig_grad_norm, it)
     writer.flush()
 
-def validate_loss(it):
 
+def validate_loss(it):
     all_refs = []
     all_recons = []
     for i, batch in enumerate(tqdm(val_loader, desc='Validate')):
@@ -166,13 +177,14 @@ def validate_loss(it):
     all_recons = torch.cat(all_recons, dim=0)
     metrics = EMD_CD(all_recons, all_refs, batch_size=args.val_batch_size)
     cd, emd = metrics['MMD-CD'].item(), metrics['MMD-EMD'].item()
-    
+
     logger.info('[Val] Iter %04d | CD %.6f | EMD %.6f  ' % (it, cd, emd))
     writer.add_scalar('val/cd', cd, it)
     writer.add_scalar('val/emd', emd, it)
     writer.flush()
 
     return cd
+
 
 def validate_inspect(it):
     sum_n = 0
@@ -185,10 +197,11 @@ def validate_inspect(it):
 
         sum_n += x.size(0)
         if i >= args.num_inspect_batches:
-            break   # Inspect only 5 batch
+            break  # Inspect only 5 batch
 
     writer.add_mesh('val/pointcloud', recons[:args.num_inspect_pointclouds], global_step=it)
     writer.flush()
+
 
 # Main loop
 logger.info('Start training...')

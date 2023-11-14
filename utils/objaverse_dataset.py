@@ -4,14 +4,14 @@ import random
 import numpy as np
 import torch
 import trimesh as trimesh
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, random_split
 from tqdm.auto import tqdm
 
 from utils.objaverse_path import load_object_paths
 
 
 class ObjaversePointCloudDataset(Dataset):
-    def __init__(self, annotations_file, pc_dir, scale_mode, file_ext='.ply', load_to_mem=False, name_filter=None, transform=None):
+    def __init__(self, annotations_file, pc_dir, scale_mode, split, file_ext='.ply', load_to_mem=False, name_filter=None, transform=None):
         self.load_to_mem = load_to_mem
         self.pc_dir = pc_dir
         # { key(uid): path(base/[dir]/uid.ply) }
@@ -35,12 +35,22 @@ class ObjaversePointCloudDataset(Dataset):
 
         self.uids = [d["uid"] for d in list(filtered_annotations.values()) if "uid" in d]
 
-        if load_to_mem:
-            self.pointclouds = self.load_all_pc_from_disk()
-
         # Deterministically shuffle the dataset
         self.uids.sort(reverse=False)
         random.Random(2023).shuffle(self.uids)
+
+        generator = torch.Generator().manual_seed(42)
+        split = random_split(self.uids, [0.8, 0.15, 0.05], generator=generator)
+
+        if split == 'train':    # 80%
+            self.uids = split[0]
+        if split == 'test':     # 15%
+            self.uids = split[1]
+        if split == 'val':      # 5%
+            self.uids = split[2]
+
+        if load_to_mem:
+            self.pointclouds = self.load_all_pc_from_disk()
 
         self.scale_mode = scale_mode
         self.transform = transform
