@@ -168,6 +168,9 @@ def validate_loss(it):
     subset_size = int(len(val_loader) * subset_percentage)
 
     for i, batch in enumerate(tqdm(val_loader, desc='Validate', total=subset_size)):
+        if i >= subset_size:
+            tqdm._instances.clear()
+            break
         if args.num_val_batches > 0 and i >= args.num_val_batches:
             break
         ref = batch['pointcloud'].to(args.device)
