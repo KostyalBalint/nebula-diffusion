@@ -36,8 +36,7 @@ class ObjaversePointCloudDataset(Dataset):
         self.uids = [d["uid"] for d in list(filtered_annotations.values()) if "uid" in d]
 
         # Deterministically shuffle the dataset
-        self.uids.sort(reverse=False)
-        random.Random(2023).shuffle(self.uids)
+        self.reset_order()
 
         generator = torch.Generator().manual_seed(42)
         split_data = random_split(self.uids, [0.8, 0.15, 0.05], generator=generator)
@@ -57,6 +56,11 @@ class ObjaversePointCloudDataset(Dataset):
 
     def __len__(self):
         return len(self.uids)
+
+    def reset_order(self):
+        # Deterministically shuffle the dataset
+        self.uids.sort(reverse=False)
+        random.Random(2023).shuffle(self.uids)
 
     def shuffle(self, seed = None):
         random.Random(seed).shuffle(self.uids)

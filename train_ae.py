@@ -48,6 +48,7 @@ parser.add_argument('--sched_start_epoch', type=int, default=150 * THOUSAND)
 parser.add_argument('--sched_end_epoch', type=int, default=300 * THOUSAND)
 
 # Training
+parser.add_argument('--initial_state_dict', type=str, default=None)
 parser.add_argument('--resume_ckpt', type=str, default=None)
 parser.add_argument('--seed', type=int, default=2020)
 parser.add_argument('--logging', type=eval, default=True, choices=[True, False])
@@ -149,6 +150,10 @@ scheduler = get_linear_scheduler(
     end_lr=args.end_lr
 )
 
+if args.initial_state_dict:
+    logger.info(f'Loaded initial state dict from: {args.initial_state_dict}')
+    model.load_state_dict(torch.load(args.initial_state_dict, map_location=args.device)['state_dict'])
+
 # Load previous state dicts
 if is_resume:
     model.load_state_dict(ckpt['state_dict'])
@@ -230,7 +235,18 @@ def validate_inspect(it):
         if i >= args.num_inspect_batches:
             break  # Inspect only 5 batch
 
-    writer.add_mesh('val/pointcloud', recons[:args.num_inspect_pointclouds], global_step=it)
+    writer.add_mesh('original/pointcloud', batch['pointcloud'][:args.num_inspect_pointclouds], global_step=it, config_dict={
+        'material': {
+            'cls': 'PointsMaterial',
+            'size': 0.05
+        }
+    })
+    writer.add_mesh('val/pointcloud', recons[:args.num_inspect_pointclouds], global_step=it, config_dict={
+        'material': {
+            'cls': 'PointsMaterial',
+            'size': 0.05
+        }
+    })
     writer.flush()
 
 
