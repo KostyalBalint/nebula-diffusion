@@ -30,7 +30,7 @@ parser.add_argument('--resume', type=str, default=None)
 parser.add_argument('--dataset_path', type=str, default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/pointClouds3000')
 parser.add_argument('--dataset_file_ext', type=str, default='.npz')
 # parser.add_argument('--categories', type=str_list, default=['airplane'])
-parser.add_argument('--scale_mode', type=str, default='shape_unit')
+parser.add_argument('--scale_mode', type=str, default='shape_bbox')
 parser.add_argument('--train_batch_size', type=int, default=128)
 parser.add_argument('--val_batch_size', type=int, default=32)
 parser.add_argument('--rotate', type=eval, default=False, choices=[True, False])
@@ -89,7 +89,7 @@ is_resume = False
 if args.resume_ckpt:
     is_resume = True
     ckpt = ckpt_mgr.load_latest()
-    args = ckpt['args']
+    #args = ckpt['args']
 
 logger.info(args)
 
