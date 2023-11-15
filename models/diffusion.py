@@ -59,6 +59,8 @@ class PointwiseNet(Module):
             ConcatSquashLinear(3, 128, context_dim+3),
             ConcatSquashLinear(128, 256, context_dim+3),
             ConcatSquashLinear(256, 512, context_dim+3),
+            ConcatSquashLinear(512, 1024, context_dim+3),
+            ConcatSquashLinear(1024, 512, context_dim+3),
             ConcatSquashLinear(512, 256, context_dim+3),
             ConcatSquashLinear(256, 128, context_dim+3),
             ConcatSquashLinear(128, 3, context_dim+3)

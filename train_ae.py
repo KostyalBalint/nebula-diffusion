@@ -16,7 +16,7 @@ from evaluation import EMD_CD
 # Arguments
 parser = argparse.ArgumentParser()
 # Model arguments
-parser.add_argument('--latent_dim', type=int, default=256)
+parser.add_argument('--latent_dim', type=int, default=512)
 parser.add_argument('--num_steps', type=int, default=200)
 parser.add_argument('--beta_1', type=float, default=1e-4)
 parser.add_argument('--beta_T', type=float, default=0.05)
