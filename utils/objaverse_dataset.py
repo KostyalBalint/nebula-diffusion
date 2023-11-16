@@ -41,12 +41,13 @@ class ObjaversePointCloudDataset(Dataset):
         generator = torch.Generator().manual_seed(42)
         split_data = random_split(self.uids, [0.8, 0.15, 0.05], generator=generator)
 
-        if split == 'train':    # 80%
-            self.uids = list(split_data[0])
-        if split == 'test':     # 15%
-            self.uids = list(split_data[1])
-        if split == 'val':      # 5%
-            self.uids = list(split_data[2])
+        if split is not None:
+            if split == 'train':    # 80%
+                self.uids = list(split_data[0])
+            if split == 'test':     # 15%
+                self.uids = list(split_data[1])
+            if split == 'val':      # 5%
+                self.uids = list(split_data[2])
 
         if load_to_mem:
             self.pointclouds = self.load_all_pc_from_disk()
@@ -121,6 +122,13 @@ class ObjaversePointCloudDataset(Dataset):
             pc_min, _ = pc.min(dim=0, keepdim=True)  # (1, 3)
             shift = ((pc_min + pc_max) / 2).view(1, 3)
             scale = (pc_max - pc_min).max().reshape(1, 1) / 2
+        elif self.scale_mode == 'unit_sphere':
+            # Shift to the center of the point cloud
+            shift = pc.mean(dim=0).reshape(1, 3)
+
+            # Scale to fit into a unit sphere
+            max_dist = torch.sqrt(((pc - shift) ** 2).sum(dim=1)).max()
+            scale =  max_dist / torch.ones([1, 1])
         else:
             shift = torch.zeros([1, 3])
             scale = torch.ones([1, 1])
