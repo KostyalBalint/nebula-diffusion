@@ -240,7 +240,12 @@ def validate_inspect(it):
 
     x = model.sample(z, encoded_text, args.sample_num_points,
                      flexibility=args.flexibility)  # , truncate_std=args.truncate_std)
-    writer.add_mesh('val/pointcloud', x, global_step=it)
+    writer.add_mesh('val/pointcloud', x, global_step=it, config_dict={
+        'material': {
+            'cls': 'PointsMaterial',
+            'size': 0.015
+        }
+    })
     writer.flush()
     logger.info('[Inspect] Generating samples...')
 
