@@ -51,20 +51,31 @@ class VarianceSchedule(Module):
 
 class PointwiseNet(Module):
 
-    def __init__(self, point_dim, context_dim, residual):
+    def __init__(self, point_dim, context_dim, residual, size='original'):
         super().__init__()
         self.act = F.leaky_relu
         self.residual = residual
-        self.layers = ModuleList([
-            ConcatSquashLinear(3, 128, context_dim+3),
-            ConcatSquashLinear(128, 256, context_dim+3),
-            ConcatSquashLinear(256, 512, context_dim+3),
-            ConcatSquashLinear(512, 1024, context_dim+3),
-            ConcatSquashLinear(1024, 512, context_dim+3),
-            ConcatSquashLinear(512, 256, context_dim+3),
-            ConcatSquashLinear(256, 128, context_dim+3),
-            ConcatSquashLinear(128, 3, context_dim+3)
-        ])
+        if size == 'original':
+            self.layers = ModuleList([
+                ConcatSquashLinear(3, 128, context_dim+3),
+                ConcatSquashLinear(128, 256, context_dim+3),
+                ConcatSquashLinear(256, 512, context_dim+3),
+                ConcatSquashLinear(512, 256, context_dim+3),
+                ConcatSquashLinear(256, 128, context_dim+3),
+                ConcatSquashLinear(128, 3, context_dim+3)
+            ])
+
+        if size == 'big':
+            self.layers = ModuleList([
+                ConcatSquashLinear(3, 128, context_dim+3),
+                ConcatSquashLinear(128, 256, context_dim+3),
+                ConcatSquashLinear(256, 512, context_dim+3),
+                ConcatSquashLinear(512, 1024, context_dim+3),
+                ConcatSquashLinear(1024, 512, context_dim+3),
+                ConcatSquashLinear(512, 256, context_dim+3),
+                ConcatSquashLinear(256, 128, context_dim+3),
+                ConcatSquashLinear(128, 3, context_dim+3)
+            ])
 
     def forward(self, x, beta, context):
         """

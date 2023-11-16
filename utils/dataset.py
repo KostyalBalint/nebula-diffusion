@@ -33,6 +33,8 @@ synsetid_to_cate = {
 }
 cate_to_synsetid = {v: k for k, v in synsetid_to_cate.items()}
 
+all_categories = list(cate_to_synsetid.keys())
+
 
 class ShapeNetCore(Dataset):
 

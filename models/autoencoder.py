@@ -7,12 +7,12 @@ from .diffusion import *
 
 class AutoEncoder(Module):
 
-    def __init__(self, args):
+    def __init__(self, args, size='original'):
         super().__init__()
         self.args = args
-        self.encoder = PointNetEncoder(zdim=args.latent_dim)
+        self.encoder = PointNetEncoder(zdim=args.latent_dim, size=size)
         self.diffusion = DiffusionPoint(
-            net = PointwiseNet(point_dim=3, context_dim=args.latent_dim, residual=args.residual),
+            net = PointwiseNet(point_dim=3, context_dim=args.latent_dim, residual=args.residual, size=size),
             var_sched = VarianceSchedule(
                 num_steps=args.num_steps,
                 beta_1=args.beta_1,

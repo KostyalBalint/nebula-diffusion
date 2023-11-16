@@ -87,18 +87,18 @@ class CheckpointManager(object):
 
         return True
 
-    def load_best(self):
+    def load_best(self, map_location = None):
         idx = self.get_best_ckpt_idx()
         if idx is None:
             raise IOError('No checkpoints found.')
-        ckpt = torch.load(os.path.join(self.save_dir, self.ckpts[idx]['file']))
+        ckpt = torch.load(os.path.join(self.save_dir, self.ckpts[idx]['file']), map_location=map_location)
         return ckpt
     
-    def load_latest(self):
+    def load_latest(self, map_location = None):
         idx = self.get_latest_ckpt_idx()
         if idx is None:
             raise IOError('No checkpoints found.')
-        ckpt = torch.load(os.path.join(self.save_dir, self.ckpts[idx]['file']))
+        ckpt = torch.load(os.path.join(self.save_dir, self.ckpts[idx]['file']), map_location=map_location)
         return ckpt
 
     def load_selected(self, file):
