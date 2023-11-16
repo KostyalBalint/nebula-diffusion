@@ -1,6 +1,8 @@
 import os
 import math
 import argparse
+from collections import OrderedDict
+
 import torch
 import torch.utils.tensorboard
 from torch.utils.data import DataLoader
@@ -21,7 +23,8 @@ from utils.objaverse_dataset import ObjaversePointCloudDataset
 parser = argparse.ArgumentParser()
 # Model arguments
 parser.add_argument('--model', type=str, default='flow', choices=['flow', 'gaussian'])
-parser.add_argument('--latent_dim', type=int, default=256)
+parser.add_argument('--model_size', type=str, default='original', choices=['original', 'big'])
+parser.add_argument('--latent_dim', type=int, default=512)
 parser.add_argument('--num_steps', type=int, default=100)
 parser.add_argument('--beta_1', type=float, default=1e-4)
 parser.add_argument('--beta_T', type=float, default=0.02)
@@ -37,7 +40,8 @@ parser.add_argument('--residual', type=eval, default=True, choices=[True, False]
 parser.add_argument('--spectral_norm', type=eval, default=False, choices=[True, False])
 
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/pointClouds3000')
+parser.add_argument('--dataset_path', type=str,
+                    default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/pointClouds3000')
 parser.add_argument('--dataset_file_ext', type=str, default='.npz')
 # parser.add_argument('--categories', type=str_list, default=['airplane'])
 parser.add_argument('--scale_mode', type=str, default='shape_unit')
@@ -57,6 +61,7 @@ parser.add_argument('--sched_start_epoch', type=int, default=200 * THOUSAND)
 parser.add_argument('--sched_end_epoch', type=int, default=400 * THOUSAND)
 
 # Training
+parser.add_argument('--pretrained_ae', type=str, default=None)
 parser.add_argument('--resume_ckpt', type=str, default=None)
 parser.add_argument('--seed', type=int, default=2020)
 parser.add_argument('--logging', type=eval, default=True, choices=[True, False])
@@ -65,7 +70,7 @@ parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--max_iters', type=int, default=float('inf'))
 parser.add_argument('--val_freq', type=int, default=1000)
 parser.add_argument('--test_freq', type=int, default=30 * THOUSAND)
-parser.add_argument('--test_size', type=int, default=400)
+parser.add_argument('--test_size', type=int, default=50)
 parser.add_argument('--tag', type=str, default=None)
 args = parser.parse_args()
 seed_all(args.seed)
@@ -110,9 +115,18 @@ logger.info('Loading datasets...')
 train_dset = ObjaversePointCloudDataset(annotations_file=args.annotations_file,
                                         file_ext=args.dataset_file_ext,
                                         pc_dir=args.dataset_path,
+                                        split='train',
                                         scale_mode=args.scale_mode,
                                         name_filter=args.name_filter,
                                         load_to_mem=args.load_to_mem)
+
+val_dset = ObjaversePointCloudDataset(annotations_file=args.annotations_file,
+                                      file_ext=args.dataset_file_ext,
+                                      pc_dir=args.dataset_path,
+                                      split='val',
+                                      scale_mode=args.scale_mode,
+                                      name_filter=args.name_filter,
+                                      load_to_mem=args.load_to_mem)
 
 args.latent_text_dim = train_dset.__getitem__(0)['latent_text'].shape[0]
 
@@ -147,11 +161,30 @@ scheduler = get_linear_scheduler(
     end_lr=args.end_lr
 )
 
+
+def map_AE_keys(state_dict):
+    new_state_dict = OrderedDict()
+
+    for key, value in state_dict.items():
+        if key.startswith('encoder'):
+            # Remove 'encoder.' from the key and add it to the new_state_dict
+            new_key = key[len('encoder.'):]
+            new_state_dict[new_key] = value
+
+    return new_state_dict
+
+
 # Load previous state dicts
 if is_resume:
+    logger.info('Resumed training, loading back model state...')
     model.load_state_dict(ckpt['state_dict'])
     optimizer.load_state_dict(ckpt['others']['optimizer'])
     scheduler.load_state_dict(ckpt['others']['scheduler'])
+elif args.pretrained_ae:
+    logger.info('Loading back AE state dict...')
+    ae_state = torch.load(args.pretrained_ae, map_location=args.device)
+    state_dict = map_AE_keys(ae_state['state_dict'])
+    model.encoder.load_state_dict(state_dict)
 
 
 # Train, validate and test
@@ -191,7 +224,8 @@ def tokenize_sentences(sentence):
     tokenizer = BertTokenizerFast.from_pretrained("setu4993/LEALLA-small")
     tokenizer_model = BertModel.from_pretrained("setu4993/LEALLA-small").to(args.device)
     tokenizer_model = tokenizer_model.eval()
-    english_inputs = tokenizer([sentence], return_tensors="pt", padding=True, max_length=512, truncation=True).to(args.device)
+    english_inputs = tokenizer([sentence], return_tensors="pt", padding=True, max_length=512, truncation=True).to(
+        args.device)
     with torch.no_grad():
         english_outputs = tokenizer_model(**english_inputs).pooler_output
 
@@ -204,14 +238,16 @@ def validate_inspect(it):
 
     z = torch.randn([args.num_samples, args.latent_dim]).to(args.device)
 
-    x = model.sample(z, encoded_text, args.sample_num_points, flexibility=args.flexibility)  # , truncate_std=args.truncate_std)
+    x = model.sample(z, encoded_text, args.sample_num_points,
+                     flexibility=args.flexibility)  # , truncate_std=args.truncate_std)
     writer.add_mesh('val/pointcloud', x, global_step=it)
     writer.flush()
     logger.info('[Inspect] Generating samples...')
 
-'''
+
 def test(it):
     ref_pcs = []
+    val_dset.shuffle()
     for i, data in enumerate(val_dset):
         if i >= args.test_size:
             break
@@ -255,7 +291,7 @@ def test(it):
     logger.info('[Test] MinMatDis | CD %.6f | EMD n/a' % (results['lgan_mmd-CD'],))
     logger.info('[Test] 1NN-Accur | CD %.6f | EMD n/a' % (results['1-NN-CD-acc'],))
     logger.info('[Test] JsnShnDis | %.6f ' % (results['jsd']))
-'''
+
 
 # Main loop
 logger.info('Start training...')

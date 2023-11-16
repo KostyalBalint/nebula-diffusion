@@ -225,7 +225,7 @@ def validate_loss(it):
 def validate_inspect(it):
     sum_n = 0
     sum_chamfer = 0
-    for i, batch in enumerate(tqdm(val_loader, desc='Inspect')):
+    for i, batch in enumerate(tqdm(val_loader, desc='Inspect', total=args.num_inspect_batches)):
         x = batch['pointcloud'].to(args.device)
         model.eval()
         code = model.encode(x)

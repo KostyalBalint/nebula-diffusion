@@ -11,10 +11,10 @@ class FlowVAE(Module):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self.encoder = PointNetEncoder(args.latent_dim)
+        self.encoder = PointNetEncoder(args.latent_dim, size=args.model_size)
         self.flow = build_latent_flow(args)
         self.diffusion = DiffusionPoint(
-            net = PointwiseNet(point_dim=3, context_dim=args.latent_dim + args.latent_text_dim, residual=args.residual),
+            net = PointwiseNet(point_dim=3, context_dim=args.latent_dim + args.latent_text_dim, residual=args.residual, size=args.model_size),
             var_sched = VarianceSchedule(
                 num_steps=args.num_steps,
                 beta_1=args.beta_1,
