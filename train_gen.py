@@ -99,7 +99,7 @@ is_resume = False
 if args.resume_ckpt:
     is_resume = True
     ckpt = ckpt_mgr.load_latest()
-    args = ckpt['args']
+    #args = ckpt['args']
 
 logger.info(args)
 
