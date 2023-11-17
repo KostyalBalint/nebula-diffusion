@@ -139,7 +139,8 @@ elif args.dataset == 'shapenet':
         annotations_path=args.annotations_file,
         split='train',
         scale_mode=args.scale_mode,
-        transform=None
+        transform=None,
+        args = args,
     )
     logger.info('Loading val set')
     val_dset = ShapeNetCoreOwn(
@@ -147,7 +148,8 @@ elif args.dataset == 'shapenet':
         annotations_path=args.annotations_file,
         split='val',
         scale_mode=args.scale_mode,
-        transform=None
+        transform=None,
+        args = args,
     )
 
 

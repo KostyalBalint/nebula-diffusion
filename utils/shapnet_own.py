@@ -8,7 +8,7 @@ from tqdm.auto import tqdm
 
 class ShapeNetCoreOwn(Dataset):
 
-    def __init__(self, path, annotations_path, split, scale_mode, transform=None):
+    def __init__(self, path, annotations_path, split, scale_mode, args, transform=None,):
         super().__init__()
 
         assert split in ('train', 'val', 'test')
@@ -19,6 +19,7 @@ class ShapeNetCoreOwn(Dataset):
         self.split = split
         self.scale_mode = scale_mode
         self.transform = transform
+        self.args = args
 
         self.pointclouds = []
 
@@ -32,7 +33,7 @@ class ShapeNetCoreOwn(Dataset):
         ann_map = {item['id']: annotations['tokenized_taxonomy'][item['category']]['tokens'] for item in annotations['taxonomy_map']}
 
         def map_pc(pc_id, pc):
-            pc, shift, scale = self.scale_pc(torch.tensor(pc.vertices, dtype=torch.float32).to(args.device))
+            pc, shift, scale = self.scale_pc(torch.tensor(pc.vertices, dtype=torch.float32).to(self.args.device))
             return {
                 'pointcloud': pc,
                 'latent_text': ann_map[pc_id],
