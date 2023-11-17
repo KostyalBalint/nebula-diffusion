@@ -37,7 +37,7 @@ class ShapeNetCoreOwn(Dataset):
         def map_pc(pc_id, pc):
             pc, shift, scale = self.scale_pc(torch.tensor(pc.vertices, dtype=torch.float32).to(self.args.device))
             return {
-                'pointcloud': pc,
+                'pointcloud': pc.cpu(),
                 'latent_text': ann_map[pc_id],
                 'id': pc_id,
                 'shift': shift,
