@@ -3,6 +3,8 @@ from copy import copy
 import torch
 from torch.utils.data import Dataset, random_split
 import numpy as np
+from tqdm.auto import tqdm
+
 
 class ShapeNetCoreOwn(Dataset):
 
@@ -42,7 +44,7 @@ class ShapeNetCoreOwn(Dataset):
         print('Loading pcs')
         point_clouds = np.load(self.path, allow_pickle=True)['arr_0'].item()
         print('Loaded pcs')
-        self.pointclouds = [map_pc(id, pc) for id, pc in point_clouds.items()]
+        self.pointclouds = [map_pc(id, pc) for id, pc in tqdm(point_clouds.items())]
 
 
         # Deterministically shuffle the dataset
