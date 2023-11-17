@@ -25,6 +25,8 @@ class ShapeNetCoreOwn(Dataset):
 
         self.load()
 
+        torch.cuda.empty_cache()
+
     def load(self):
 
         annotations = np.load(self.annotations_path, allow_pickle=True).item()  ## dict_keys(['taxonomy_map', 'tokenized_taxonomy'])
