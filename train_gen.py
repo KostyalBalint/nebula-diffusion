@@ -18,6 +18,7 @@ from models.vae_flow import *
 from models.flow import add_spectral_norm, spectral_norm_power_iteration
 from evaluation import *
 from utils.objaverse_dataset import ObjaversePointCloudDataset
+from utils.shapnet_own import ShapeNetCoreOwn
 
 # Arguments
 parser = argparse.ArgumentParser()
@@ -40,6 +41,7 @@ parser.add_argument('--residual', type=eval, default=True, choices=[True, False]
 parser.add_argument('--spectral_norm', type=eval, default=False, choices=[True, False])
 
 # Datasets and loaders
+parser.add_argument('--dataset', type=str, default='objaverse', choices=['shapenet', 'objaverse'])
 parser.add_argument('--dataset_path', type=str,
                     default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/pointClouds3000')
 parser.add_argument('--dataset_file_ext', type=str, default='.npz')
@@ -99,7 +101,7 @@ is_resume = False
 if args.resume_ckpt:
     is_resume = True
     ckpt = ckpt_mgr.load_latest()
-    #args = ckpt['args']
+    # args = ckpt['args']
 
 logger.info(args)
 
@@ -112,21 +114,39 @@ logger.info('Loading datasets...')
 #    split='train',
 #    scale_mode=args.scale_mode,
 # )
-train_dset = ObjaversePointCloudDataset(annotations_file=args.annotations_file,
-                                        file_ext=args.dataset_file_ext,
-                                        pc_dir=args.dataset_path,
-                                        split='train',
-                                        scale_mode=args.scale_mode,
-                                        name_filter=args.name_filter,
-                                        load_to_mem=args.load_to_mem)
 
-val_dset = ObjaversePointCloudDataset(annotations_file=args.annotations_file,
-                                      file_ext=args.dataset_file_ext,
-                                      pc_dir=args.dataset_path,
-                                      split='val',
-                                      scale_mode=args.scale_mode,
-                                      name_filter=args.name_filter,
-                                      load_to_mem=args.load_to_mem)
+if args.dataset == 'objaverse':
+    train_dset = ObjaversePointCloudDataset(annotations_file=args.annotations_file,
+                                            file_ext=args.dataset_file_ext,
+                                            pc_dir=args.dataset_path,
+                                            split='train',
+                                            scale_mode=args.scale_mode,
+                                            name_filter=args.name_filter,
+                                            load_to_mem=args.load_to_mem)
+
+    val_dset = ObjaversePointCloudDataset(annotations_file=args.annotations_file,
+                                          file_ext=args.dataset_file_ext,
+                                          pc_dir=args.dataset_path,
+                                          split='val',
+                                          scale_mode=args.scale_mode,
+                                          name_filter=args.name_filter,
+                                          load_to_mem=args.load_to_mem)
+elif args.dataset == 'shapenet':
+    train_dset = ShapeNetCoreOwn(
+        path=args.dataset_path,
+        annotations_path=args.annotations_file,
+        split='train',
+        scale_mode=args.scale_mode,
+        transform=None
+    )
+    val_dset = ShapeNetCoreOwn(
+        path=args.dataset_path,
+        annotations_path=args.annotations_file,
+        split='val',
+        scale_mode=args.scale_mode,
+        transform=None
+    )
+
 
 args.latent_text_dim = train_dset.__getitem__(0)['latent_text'].shape[0]
 
