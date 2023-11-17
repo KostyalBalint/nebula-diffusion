@@ -39,8 +39,8 @@ class ShapeNetCoreOwn(Dataset):
                    annotations['taxonomy_map']}
 
         def map_pc(pc_id, pc):
-            pc = self.remove_points(torch.tensor(pc.vertices, dtype=torch.float32), self.point_count)
-            pc, shift, scale = self.scale_pc(pc.to(self.args.device))
+            pc = self.remove_points(torch.tensor(pc.vertices, dtype=torch.float32).to(self.args.device), self.point_count)
+            pc, shift, scale = self.scale_pc(pc)
             return {
                 'pointcloud': pc.cpu(),
                 'latent_text': ann_map[pc_id],
@@ -69,7 +69,7 @@ class ShapeNetCoreOwn(Dataset):
 
     def remove_points(self, pc, desired_point_count):
         n = pc.size(0)
-        random_indices = torch.randperm(n)[:desired_point_count]
+        random_indices = torch.randperm(n).to(self.args.device)[:desired_point_count]
         return pc[random_indices]
 
     def scale_pc(self, pc):
