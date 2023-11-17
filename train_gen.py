@@ -41,6 +41,7 @@ parser.add_argument('--residual', type=eval, default=True, choices=[True, False]
 parser.add_argument('--spectral_norm', type=eval, default=False, choices=[True, False])
 
 # Datasets and loaders
+parser.add_argument('--point_count', type=int, default=2048)
 parser.add_argument('--dataset', type=str, default='objaverse', choices=['shapenet', 'objaverse'])
 parser.add_argument('--dataset_path', type=str,
                     default='/Users/kostyalbalint/Documents/Egyetem/7.Felev/Szakdolgozat/pointClouds3000')
@@ -141,6 +142,7 @@ elif args.dataset == 'shapenet':
         scale_mode=args.scale_mode,
         transform=None,
         args = args,
+        point_count=args.point_count
     )
     logger.info('Loading val set')
     val_dset = ShapeNetCoreOwn(
@@ -150,6 +152,7 @@ elif args.dataset == 'shapenet':
         scale_mode=args.scale_mode,
         transform=None,
         args = args,
+        point_count=args.point_count
     )
 
 

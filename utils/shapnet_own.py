@@ -8,11 +8,12 @@ from tqdm.auto import tqdm
 
 class ShapeNetCoreOwn(Dataset):
 
-    def __init__(self, path, annotations_path, split, scale_mode, args, transform=None,):
+    def __init__(self, path, annotations_path, split, scale_mode, args, transform=None, point_count=2048):
         super().__init__()
 
         assert split in ('train', 'val', 'test')
-        assert scale_mode is None or scale_mode in ('global_unit', 'shape_unit', 'shape_bbox', 'shape_half', 'shape_34', 'unit_sphere')
+        assert scale_mode is None or scale_mode in (
+        'global_unit', 'shape_unit', 'shape_bbox', 'shape_half', 'shape_34', 'unit_sphere')
         self.path = path
         self.annotations_path = annotations_path
 
@@ -20,6 +21,7 @@ class ShapeNetCoreOwn(Dataset):
         self.scale_mode = scale_mode
         self.transform = transform
         self.args = args
+        self.point_count = point_count
 
         self.pointclouds = []
 
@@ -29,13 +31,16 @@ class ShapeNetCoreOwn(Dataset):
 
     def load(self):
 
-        annotations = np.load(self.annotations_path, allow_pickle=True).item()  ## dict_keys(['taxonomy_map', 'tokenized_taxonomy'])
+        annotations = np.load(self.annotations_path,
+                              allow_pickle=True).item()  ## dict_keys(['taxonomy_map', 'tokenized_taxonomy'])
         print('Loaded annotations')
 
-        ann_map = {item['id']: annotations['tokenized_taxonomy'][item['category']]['tokens'] for item in annotations['taxonomy_map']}
+        ann_map = {item['id']: annotations['tokenized_taxonomy'][item['category']]['tokens'] for item in
+                   annotations['taxonomy_map']}
 
         def map_pc(pc_id, pc):
-            pc, shift, scale = self.scale_pc(torch.tensor(pc.vertices, dtype=torch.float32).to(self.args.device))
+            pc = self.remove_points(torch.tensor(pc.vertices, dtype=torch.float32), self.point_count)
+            pc, shift, scale = self.scale_pc(pc.to(self.args.device))
             return {
                 'pointcloud': pc.cpu(),
                 'latent_text': ann_map[pc_id],
@@ -49,7 +54,6 @@ class ShapeNetCoreOwn(Dataset):
         print('Loaded pcs')
         self.pointclouds = [map_pc(id, pc) for id, pc in tqdm(point_clouds.items())]
 
-
         # Deterministically shuffle the dataset
         self.pointclouds.sort(key=lambda data: data['id'], reverse=False)
         random.Random(2023).shuffle(self.pointclouds)
@@ -62,6 +66,11 @@ class ShapeNetCoreOwn(Dataset):
                 self.pointclouds = list(split_data[0])
             if self.split == 'val':
                 self.pointclouds = list(split_data[1])
+
+    def remove_points(self, pc, desired_point_count):
+        n = pc.size(0)
+        random_indices = torch.randperm(n)[:desired_point_count]
+        return pc[random_indices]
 
     def scale_pc(self, pc):
         if self.scale_mode == 'shape_unit':
@@ -84,7 +93,7 @@ class ShapeNetCoreOwn(Dataset):
 
             # Scale to fit into a unit sphere
             max_dist = torch.sqrt(((pc - shift) ** 2).sum(dim=1)).max()
-            scale =  max_dist / torch.ones([1, 1]).to(self.args.device)
+            scale = max_dist / torch.ones([1, 1]).to(self.args.device)
         else:
             shift = torch.zeros([1, 3])
             scale = torch.ones([1, 1])
@@ -95,8 +104,7 @@ class ShapeNetCoreOwn(Dataset):
         return len(self.pointclouds)
 
     def __getitem__(self, idx):
-        data = {k:v.clone() if isinstance(v, torch.Tensor) else copy(v) for k, v in self.pointclouds[idx].items()}
+        data = {k: v.clone() if isinstance(v, torch.Tensor) else copy(v) for k, v in self.pointclouds[idx].items()}
         if self.transform is not None:
             data = self.transform(data)
         return data
-
