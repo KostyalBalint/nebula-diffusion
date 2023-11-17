@@ -331,7 +331,7 @@ logger.info('Start training...')
 try:
     it = 1
     if is_resume:
-        it = ckpt['others']['iteration']
+        it = ckpt['others']['iteration'] + 1
     while it <= args.max_iters:
         train(it)
         if it % args.val_freq == 0 or it == args.max_iters:
