@@ -25,6 +25,7 @@ class ShapeNetCoreOwn(Dataset):
     def load(self):
 
         annotations = np.load(self.annotations_path, allow_pickle=True).item()  ## dict_keys(['taxonomy_map', 'tokenized_taxonomy'])
+        print('Loaded annotations')
 
         ann_map = {item['id']: annotations['tokenized_taxonomy'][item['category']]['tokens'] for item in annotations['taxonomy_map']}
 
@@ -38,7 +39,9 @@ class ShapeNetCoreOwn(Dataset):
                 'scale': scale
             }
 
+        print('Loading pcs')
         point_clouds = np.load(self.path, allow_pickle=True)['arr_0'].item()
+        print('Loaded pcs')
         self.pointclouds = [map_pc(id, pc) for id, pc in point_clouds.items()]
 
 

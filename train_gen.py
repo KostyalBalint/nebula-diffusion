@@ -132,6 +132,8 @@ if args.dataset == 'objaverse':
                                           name_filter=args.name_filter,
                                           load_to_mem=args.load_to_mem)
 elif args.dataset == 'shapenet':
+    logger.info('Useing shapenet dataset')
+    logger.info('Loading train set')
     train_dset = ShapeNetCoreOwn(
         path=args.dataset_path,
         annotations_path=args.annotations_file,
@@ -139,6 +141,7 @@ elif args.dataset == 'shapenet':
         scale_mode=args.scale_mode,
         transform=None
     )
+    logger.info('Loading val set')
     val_dset = ShapeNetCoreOwn(
         path=args.dataset_path,
         annotations_path=args.annotations_file,
@@ -150,7 +153,7 @@ elif args.dataset == 'shapenet':
 
 args.latent_text_dim = train_dset.__getitem__(0)['latent_text'].shape[0]
 
-print('Dataset size: ' + str(train_dset.__len__()))
+logger.info('Dataset size: ' + str(train_dset.__len__()))
 
 train_iter = get_data_iterator(DataLoader(
     train_dset,
