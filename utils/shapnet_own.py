@@ -82,7 +82,7 @@ class ShapeNetCoreOwn(Dataset):
 
             # Scale to fit into a unit sphere
             max_dist = torch.sqrt(((pc - shift) ** 2).sum(dim=1)).max()
-            scale =  max_dist / torch.ones([1, 1])
+            scale =  max_dist / torch.ones([1, 1]).to(self.args.device)
         else:
             shift = torch.zeros([1, 3])
             scale = torch.ones([1, 1])
