@@ -32,7 +32,7 @@ class ShapeNetCoreOwn(Dataset):
         ann_map = {item['id']: annotations['tokenized_taxonomy'][item['category']]['tokens'] for item in annotations['taxonomy_map']}
 
         def map_pc(pc_id, pc):
-            pc, shift, scale = self.scale_pc(torch.tensor(pc.vertices, dtype=torch.float32))
+            pc, shift, scale = self.scale_pc(torch.tensor(pc.vertices, dtype=torch.float32).to(args.device))
             return {
                 'pointcloud': pc,
                 'latent_text': ann_map[pc_id],
