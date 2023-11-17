@@ -261,7 +261,7 @@ def tokenize_sentences(sentence):
 
 
 def validate_inspect(it):
-    encoded_text = tokenize_sentences("Table")
+    encoded_text = tokenize_sentences("Airplane plane flying jet")
     encoded_text = torch.tensor(np.resize(encoded_text, (args.num_samples, encoded_text.shape[0]))).to(args.device)
 
     z = torch.randn([args.num_samples, args.latent_dim]).to(args.device)
